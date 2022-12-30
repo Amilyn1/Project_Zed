@@ -1,0 +1,428 @@
+﻿WITH funnels AS (
+  SELECT DISTINCT b.browse_date,
+     b.user_id,
+     c.user_id IS NOT NULL AS 'is_checkout',
+     p.user_id IS NOT NULL AS 'is_purchase'
+  FROM browse AS 'b'
+  LEFT JOIN checkout AS 'c'
+    ON c.user_id = b.user_id
+  LEFT JOIN purchase AS 'p'
+    ON p.user_id = c.user_id)
+SELECT browse_date, COUNT(*) AS 'num_browse',
+   SUM(is_checkout) AS 'num_checkout',
+   SUM(is_purchase) AS 'num_purchase',
+   1.0 * SUM(is_checkout) / COUNT(user_id) AS 'browse_to_checkout',
+   1.0 * SUM(is_purchase) / SUM(is_checkout) AS 'checkout_to_purchase'
+FROM funnels
+GROUP BY browse_date
+ORDER BY browse_date;
+
+
+
+
+
+
+Database Schema
+browse
+name
+	type
+	user_id
+	TEXT
+	browse_date
+	TEXT
+	item_id
+	INTEGER
+	
+
+Rows: 2352
+	items
+name
+	type
+	id
+	INTEGER
+	item
+	TEXT
+	price
+	REAL
+	
+
+Rows: 33
+	checkout
+name
+	type
+	user_id
+	TEXT
+	checkout_date
+	TEXT
+	item_id
+	INTEGER
+	
+
+Rows: 539
+	purchase
+name
+	type
+	user_id
+	TEXT
+	purchase_date
+	TEXT
+	item_id
+	INTEGER
+	
+
+Rows: 472
+	
+
+USAGE FUNNELS
+Results
+Overall conversion rates:
+browse
+	checkout
+	purchase
+	browse_to_checkout
+	checkout_to_purchase
+	775
+	183
+	163
+	0.236
+	0.890
+	
+
+How conversion rates change as we get closer to Christmas:
+browse_date
+	browse
+	checkout
+	purchase
+	browse_to_checkout
+	checkout_to_purchase
+	2017-12-20
+	100
+	20
+	16
+	0.2
+	0.8
+	2017-12-21
+	150
+	33
+	28
+	0.22
+	0.84
+	2017-12-22
+	250
+	62
+	55
+	0.24
+	0.88
+	2017-12-23
+	275
+	68
+	64
+	0.24
+	0.94
+
+
+	________________
+
+
+CHURN RATE
+
+
+WITH months AS (
+  SELECT 
+    '2017-01-01' AS first_day, 
+    '2017-01-31' AS last_day 
+  UNION 
+  SELECT 
+    '2017-02-01' AS first_day, 
+    '2017-02-28' AS last_day 
+  UNION 
+  SELECT 
+    '2017-03-01' AS first_day, 
+    '2017-03-31' AS last_day
+), 
+cross_join AS (
+  SELECT *
+  FROM subscriptions
+  CROSS JOIN months
+), 
+status AS (
+  SELECT 
+    id, 
+    first_day AS month, 
+    CASE
+      WHEN (subscription_start < first_day) 
+        AND (
+          subscription_end > first_day 
+          OR subscription_end IS NULL
+        ) THEN 1
+      ELSE 0
+    END AS is_active, 
+    CASE
+      WHEN subscription_end BETWEEN first_day AND last_day THEN 1
+      ELSE 0
+    END AS is_canceled 
+  FROM cross_join
+), 
+status_aggregate AS (
+  SELECT 
+    month, 
+    SUM(is_active) AS active, 
+    SUM(is_canceled) AS canceled 
+  FROM status 
+  GROUP BY month
+) 
+SELECT
+  month, 
+  1.0 * canceled / active AS churn_rate 
+FROM status_aggregate;
+
+
+
+
+WITH months AS (
+  SELECT 
+    '2017-01-01' AS first_day, 
+    '2017-01-31' AS last_day 
+  UNION 
+  SELECT
+    '2017-02-01' AS first_day, 
+    '2017-02-28' AS last_day 
+  UNION 
+  SELECT
+    '2017-03-01' AS first_day, 
+    '2017-03-31' AS last_day
+)
+
+
+cross_join AS (
+  SELECT *
+  FROM subscriptions
+  CROSS JOIN months)
+
+
+status AS (
+  SELECT 
+    id, 
+    first_day AS month, 
+  CASE
+    WHEN (segment = 87) 
+    AND (subscription_start < first_day)    
+    AND (subscription_end > first_day 
+    OR subscription_end IS NULL) THEN 1
+    ELSE 0 
+    END AS is_active_87,
+  CASE
+    WHEN (segment = 30) 
+    AND (subscription_start < first_day)    
+    AND (subscription_end > first_day 
+    OR subscription_end IS NULL) 
+    THEN 1
+    ELSE 0 
+  END as is_active_30
+FROM cross_join      
+);
+
+
+ -- 1
+ SELECT *
+ FROM subscriptions
+ LIMIT 100;
+ 
+ -- 2
+ SELECT
+   MIN(subscription_start),
+   MAX(subscription_start)
+ FROM subscriptions;
+ 
+ -- 3
+ WITH months AS (
+  SELECT 
+    '2017-01-01' AS first_day, 
+    '2017-01-31' AS last_day 
+  UNION 
+  SELECT 
+    '2017-02-01' AS first_day, 
+    '2017-02-28' AS last_day 
+  UNION 
+  SELECT 
+    '2017-03-01' AS first_day, 
+    '2017-03-31' AS last_day
+),
+-- 4
+cross_join AS (
+  SELECT * 
+  FROM subscriptions
+  CROSS JOIN months
+),
+-- 5
+status AS (
+  SELECT 
+    id, 
+    first_day AS month, 
+    CASE
+      WHEN segment = 87
+        AND (subscription_start < first_day) 
+        AND (
+          subscription_end > first_day 
+          OR subscription_end IS NULL
+        ) THEN 1
+      ELSE 0
+    END AS is_active_87,
+    CASE
+      WHEN segment = 30
+        AND (subscription_start < first_day) 
+        AND (
+          subscription_end > first_day 
+          OR subscription_end IS NULL
+        ) THEN 1
+      ELSE 0
+    END AS is_active_30,
+-- 6
+    CASE
+      WHEN segment = 87
+      AND subscription_end BETWEEN first_day AND last_day THEN 1
+      ELSE 0
+    END AS is_canceled_87,
+    CASE
+      WHEN segment = 30
+      AND subscription_end BETWEEN first_day AND last_day THEN 1
+      ELSE 0
+    END AS is_canceled_30
+  FROM cross_join
+),
+-- 7
+status_aggregate AS (
+  SELECT 
+    month, 
+    SUM(is_active_87) AS sum_active_87,
+    SUM(is_active_30) AS sum_active_30,
+    SUM(is_canceled_87) AS sum_canceled_87,
+    SUM(is_canceled_30) AS sum_canceled_30
+  FROM status 
+  GROUP BY month
+)
+-- 8
+SELECT
+  month,
+  1.0 * sum_canceled_30 / sum_active_30 AS churn_rate_30,
+  1.0 * sum_canceled_87 / sum_active_87 AS churn_rate_87
+FROM status_aggregate;
+
+
+
+
+-- Examining the table
+SELECT *
+FROM subscriptions
+LIMIT 100;
+-- Establish the range of months
+ SELECT
+   MIN(subscription_start),
+   MAX(subscription_start)
+ FROM subscriptions;
+-- Creating a temporary table of first 3 complete months
+ WITH months AS (
+  SELECT 
+    '2017-01-01' AS first_day, 
+    '2017-01-31' AS last_day 
+  UNION 
+  SELECT 
+    '2017-02-01' AS first_day, 
+    '2017-02-28' AS last_day 
+  UNION 
+  SELECT 
+    '2017-03-01' AS first_day, 
+    '2017-03-31' AS last_day
+);
+-- Temporary table cross-joining subscriptions and temp months
+cross_join AS (
+  SELECT * 
+  FROM subscriptions
+  CROSS JOIN months
+);
+-- Temporary table with active status of each segment
+status AS (
+  SELECT 
+    id, 
+    first_day AS month, 
+    CASE
+      WHEN segment = 87
+        AND (subscription_start < first_day) 
+        AND (
+          subscription_end > first_day 
+          OR subscription_end IS NULL
+        ) THEN 1
+      ELSE 0
+    END AS is_active_87,
+    CASE
+      WHEN segment = 30
+        AND (subscription_start < first_day) 
+        AND (
+          subscription_end > first_day 
+          OR subscription_end IS NULL
+        ) THEN 1
+      ELSE 0
+    END AS is_active_30,
+-- Add cancellation status for segments
+    CASE
+      WHEN segment = 87
+      AND subscription_end BETWEEN first_day AND last_day THEN 1
+      ELSE 0
+    END AS is_canceled_87,
+    CASE
+      WHEN segment = 30
+      AND subscription_end BETWEEN first_day AND last_day THEN 1
+      ELSE 0
+    END AS is_canceled_30
+  FROM cross_join
+),
+-- 7 Creating a temporary table summing active and cancelled subscriptions for each segment by month
+status_aggregate AS (
+  SELECT 
+    month, 
+    SUM(is_active_87) AS sum_active_87,
+    SUM(is_active_30) AS sum_active_30,
+    SUM(is_canceled_87) AS sum_canceled_87,
+    SUM(is_canceled_30) AS sum_canceled_30
+  FROM status 
+  GROUP BY month
+)
+-- Calculating churn rate of each segment over 3-month period
+SELECT
+  month,
+  1.0 * sum_canceled_30 / sum_active_30 AS churn_rate_30,
+  1.0 * sum_canceled_87 / sum_active_87 AS churn_rate_87
+FROM status_aggregate;
+
+
+First touch:
+
+
+ SELECT user_id,
+   MIN(timestamp) AS 'first_touch_at'
+FROM page_visits
+GROUP BY user_id;
+
+
+SELECT user_id,
+   MAX(timestamp) AS 'last_touch_at'
+FROM page_visits
+GROUP BY user_id;
+
+
+First and Last Touch Attribution
+
+
+WITH last_touch AS (
+  SELECT user_id,
+    MAX(timestamp) as last_touch_at
+  FROM page_visits
+  GROUP BY user_id)
+SELECT lt.user_id,
+  lt.last_touch_at,
+  pv.utm_source
+FROM last_touch lt
+JOIN page_visits pv
+  ON lt.user_id = pv.user_id
+  AND lt.last_touch_at = pv.timestamp
+WHERE lt.user_id = 10069;
